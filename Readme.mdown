@@ -1,32 +1,32 @@
 # Taxi Formal Binding Spec:
 
-'''coffee
+```coffee
 {
   namespace: String="none"
   path: Array
   handler: Function #(required for .bind)
   context: Object
 }
-'''
+```
 
 Taxi will convert certain strings into the formal spec.
 
-'''coffee
+```coffee
 "event" is {namespace: "none", path: ["event"], ... }
 "event.ns" is {namespace: "ns", path: ["event"], ... }
 ".ns" is {namespace: "ns", path: [], ... }
-'''
+```
 
 # Taxi Paths
 
 The path is a list of either strings or Pathology constructors.
 
-'''coffee
+```coffee
     Thing = Pathology.Object.extend()
 
     {path: [Thing]}
     # is a valid Taxi binding.
-'''
+```
 
 A path in Taxi corresponds to properties of objects defined
 as Pathology.Property objects. String path segments correspond
@@ -35,7 +35,7 @@ to the .couldBe() method of a Property.
 
 For example: A Thing with two properties:
 
-'''coffee
+```coffee
 SubThing = Thing.extend()
 
 Thing.property "name"
@@ -47,7 +47,7 @@ Thing.properties("relatedThing").couldBe = (object) ->
   false
   
 thing1 = Thing.create()
-'''
+```
 
 ["name"], ["relatedThing"], [SubThing], and [Thing] are all likely paths to bind
 onto for thing1.
@@ -56,7 +56,7 @@ onto for thing1.
 
 Taxi events bubble "up" the Path.
 
-'''coffee
+```coffee
 Parent = Pathology.Object.extend()
 Child = Pathology.Object.extend()
 Grandchild = Pathology.Object.extend()
@@ -71,14 +71,14 @@ grandpa.children().add ma
 ma.children().add me
 
 Parent.bind [Child, Grandchild, "birthday"], (-> puts "CELEBRATE")
-'''
+```
 
 So this is a tricky manouvre. We want this to happen: HOW DOES THIS HAPPEN!
 
 How do we bubble events? Must we continually watch properties and bind/unbind on
 their changing? That would work.
 
-'''coffee
+```coffee
 class Bubbler
   signature: ->
 
@@ -92,5 +92,5 @@ class Bubbler
 
  me.trigger("birthday")
  => "CELEBRATE"
- '''
+ ```
  
