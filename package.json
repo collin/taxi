@@ -1,0 +1,21 @@
+{
+  "author": "Collin Miller <collintmiller@gmail.com>",
+  "name": "taxi",
+  "description": "An event system I've been using. Integrates w/pathology.",
+  "version": "0.1.0",
+  "repository": {
+    "url": ""
+  },
+  "main": "lib/taxi",
+  "scripts": {
+    "test": "nodeunit test/*"
+  },
+  "engines": {
+    "node": "~0.6.6"
+  },
+  "dependencies": {
+    "underscore": "latest",
+    "pathology": "latest"
+  },
+  "devDependencies": {}
+}
