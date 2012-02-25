@@ -71,12 +71,44 @@ grandpa.children().add ma
 ma.children().add me
 
 Parent.bind [Child, Grandchild, "birthday"], (-> puts "CELEBRATE")
+
+me.trigger("birthday")
+#=> "CELEBRATE"
 ```
 
 So this is a tricky manouvre. We want this to happen: HOW DOES THIS HAPPEN!
 
 How do we bubble events? Must we continually watch properties and bind/unbind on
-their changing? That would work.
+their changing? That would work. It would also be quite twisty. As you have to
+track the nested objects, and their nested objects as far as you may need to go!
+
+Something like:
+
+```coffee
+class Property
+  events: ->
+    @object.events.map (event) => @doesMatch(event.path[0])
+
+  applyBindings: ->
+    for event in @events()
+      @applyBinding(event.shifted()) unless @blank()
+      @bind "change", bind(this, @applyBinding, event.shifted())
+
+  applyBinding: (event, newvalue=@value(), oldvalue) ->
+    oldvalue?.unbind(@namespace)
+    properties = newvalue.propertiesMatching(event.path[0])
+    return unless any properties
+    for property in properties
+      property.applyBinding(event.shifted()) unless property.blank()
+      property.bind "change", bind(property, property.applyBinding, event.shifted)
+
+  revokeBindings: ->
+    object.unbind(@namespace) for object in @boundObjects
+
+Pathology.Object.set = (property, newvalue, oldvalue) ->
+  @property.revokeBindings()
+  @property.applyBindings(newvalue)
+```
 
 ```coffee
 class Bubbler
@@ -90,7 +122,4 @@ class Bubbler
   for property of @properties
     break if bubbler = property.doesMatch(piece)
 
- me.trigger("birthday")
- => "CELEBRATE"
- ```
- 
+```
