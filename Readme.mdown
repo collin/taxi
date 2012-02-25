@@ -4,8 +4,8 @@
 {
   namespace: String="none"
   path: Array
-  handler: Function #(required for .bind)
-  context: Object
+  handler: Function # required for calls to .bind, optional for .unbind, meaningless for .trigger
+  context: Object # only for .bind, defaults to object .bind is called upon
 }
 ```
 
