@@ -3,7 +3,7 @@
 ```coffee
 {
   namespace: String="none"
-  path: Array
+  event: String # required for .bind and .trigger, optional for .unbind
   handler: Function # required for calls to .bind, optional for .unbind, meaningless for .trigger
   context: Object # only for .bind, defaults to object .bind is called upon
 }
@@ -12,114 +12,9 @@
 Taxi will convert certain strings into the formal spec.
 
 ```coffee
-"event" is {namespace: "none", path: ["event"], ... }
-"event.ns" is {namespace: "ns", path: ["event"], ... }
-".ns" is {namespace: "ns", path: [], ... }
+"event" is {namespace: "none", event: "event", ... }
+"event.ns" is {namespace: "ns", path: "event", ... }
+".ns" is {namespace: "ns", event: NO_EVENT, ... }
 ```
 
 # Taxi Paths
-
-The path is a list of either strings or Pathology constructors.
-
-```coffee
-    Thing = Pathology.Object.extend()
-
-    {path: [Thing]}
-    # is a valid Taxi binding.
-```
-
-A path in Taxi corresponds to properties of objects defined
-as Pathology.Property objects. String path segments correspond
-to Property names. Pathology constructor path segments correspond
-to the .couldBe() method of a Property.
-
-For example: A Thing with two properties:
-
-```coffee
-SubThing = Thing.extend()
-
-Thing.property "name"
-Thing.property "relatedThing"
-Thing.properties("relatedThing").couldBe = (object) -> 
-  return true if object is @name
-  return true if object is Thing
-  return true if object in Thing.descendants
-  false
-  
-thing1 = Thing.create()
-```
-
-["name"], ["relatedThing"], [SubThing], and [Thing] are all likely paths to bind
-onto for thing1.
-
-# Taxi event dispatch
-
-Taxi events bubble "up" the Path.
-
-```coffee
-Parent = Pathology.Object.extend()
-Child = Pathology.Object.extend()
-Grandchild = Pathology.Object.extend()
-
-# ... various property definitions ...
-
-grandpa = Parent.create()
-ma = Child.create()
-me = Child.create()
-
-grandpa.children().add ma
-ma.children().add me
-
-Parent.bind [Child, Grandchild, "birthday"], (-> puts "CELEBRATE")
-
-me.trigger("birthday")
-#=> "CELEBRATE"
-```
-
-So this is a tricky manouvre. We want this to happen: HOW DOES THIS HAPPEN!
-
-How do we bubble events? Must we continually watch properties and bind/unbind on
-their changing? That would work. It would also be quite twisty. As you have to
-track the nested objects, and their nested objects as far as you may need to go!
-
-Something like:
-
-```coffee
-class Property
-  events: ->
-    @object.events.map (event) => @doesMatch(event.path[0])
-
-  applyBindings: ->
-    for event in @events()
-      @applyBinding(event.shifted()) unless @blank()
-      @bind "change", bind(this, @applyBinding, event.shifted())
-
-  applyBinding: (event, newvalue=@value(), oldvalue) ->
-    oldvalue?.unbind(@namespace)
-    properties = newvalue.propertiesMatching(event.path[0])
-    return unless any properties
-    for property in properties
-      property.applyBinding(event.shifted()) unless property.blank()
-      property.bind "change", bind(property, property.applyBinding, event.shifted)
-
-  revokeBindings: ->
-    object.unbind(@namespace) for object in @boundObjects
-
-Pathology.Object.set = (property, newvalue, oldvalue) ->
-  @property.revokeBindings()
-  @property.applyBindings(newvalue)
-```
-
-```coffee
-class Bubbler
-  signature: ->
-
-@registerBubbles = (path) ->
-  matcher
-
-@bubbleMatcher = (piece) ->
-  bubbler = null
-  for property of @properties
-    break if bubbler = property.doesMatch(piece)
-
-```
