@@ -1,6 +1,6 @@
 puts = console.log
 Pathology = require "pathology"
-module.exports = Taxi = Pathology.Namespace.create("Taxi")
+Taxi = module.exports = Pathology.Namespace.create("Taxi")
 {isString, concat, flatten, map, invoke, compact, slice, toArray, pluck, indexOf, include, last, any} = require "underscore"
 
 EVENT_NAMESPACER = /\.([\w-_]+)$/
@@ -109,18 +109,19 @@ Taxi.Segment = Pathology.Object.extend
   followingSegments: ->
     @path.segmentsAfter(this)
 
-
 Taxi.Mixin = Pathology.Mixin.create
   included: ->
 
+  static:
+    property: (name) ->
+      Taxi.Property.create(name, this)
+      
   instance:
     bindPath: (path, handler) ->
       _path = Taxi.Path.create(this, handler)
       _path.addSegment(segment) for segment in path
       _path
 
-    property: (name) ->
-      Taxi.Property.create(name, this)
 
     bind: specParser (spec, _arguments) ->
       @_callbacks ?= new Object
@@ -154,12 +155,13 @@ Taxi.Mixin = Pathology.Mixin.create
         for _spec in @_callbacks[spec.event][spec.namespace]
           _spec.invoke(_arguments)
 
-Taxi.Property = Pathology.Property.extend
-  Instance: Pathology.Property.Instance.extend
-    set: (value) ->
-      return value if value is @value
-      @value = value
-      @trigger "change"
-      value
+# Specify on multiple lines to retain object paths.
+Taxi.Property = Pathology.Property.extend()
+Taxi.Property.Instance = Pathology.Property.Instance.extend
+  set: (value) ->
+    return value if value is @value
+    @value = value
+    @trigger "change"
+    value
 
 Taxi.Mixin.extends Taxi.Property.Instance

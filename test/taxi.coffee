@@ -4,6 +4,7 @@ Pathology = require("pathology")
 
 {extend} = require("underscore")
 
+
 NS = Pathology.Namespace.create("NS")
 Evented = NS.Evented = Pathology.Object.extend()
 Taxi.Mixin.extends(Evented)
@@ -80,7 +81,6 @@ exports.Taxi =
       o = Evented.create()
       o.key.bind "change", -> test.ok(true); test.done()
       o.key.set("value")
-
 
   "bindPath()":
     "triggers events bound on a path": (test) ->
