@@ -5,16 +5,16 @@ Pathology = require("pathology")
 {extend} = require("underscore")
 
 
-NS = Pathology.Namespace.create("NS")
+NS = Pathology.Namespace.new("NS")
 Evented = NS.Evented = Pathology.Object.extend()
-Taxi.Mixin.extends(Evented)
+Evented.include Taxi.Mixin
 Evented.property("key")
 
 exports.Taxi =
   "bind()/trigger()":
     "trigger events without namespace": (test) ->
       test.expect 3
-      o = Evented.create()
+      o = Evented.new()
       o.bind "event.namespace", -> test.ok true
       o.bind "event.namespace2", -> test.ok true
       o.bind "event", -> test.ok true
@@ -24,7 +24,7 @@ exports.Taxi =
 
     "trigger events with namespace": (test) ->
       test.expect 1
-      o = Evented.create()
+      o = Evented.new()
       o.bind "event2.namespace2", -> test.ok true
       o.bind "event.namespace2", -> test.ok true
       o.bind "event", -> test.ok true
@@ -32,10 +32,26 @@ exports.Taxi =
 
       test.done()
 
+    "all events are triggerd on 'all' bindings": (test) ->
+      test.expect 3
+      o = Evented.new()
+      o.bind "all", -> test.ok true
+      o.trigger "one"
+      o.trigger "two"
+      o.trigger "three"
+      test.done()
+
+    "'all' events pass through the real event name": (test) ->
+      test.expect 1
+      o = Evented.new()
+      o.bind "all", (realEvent) -> test.equal "mccoy", realEvent
+      o.trigger("mccoy")
+      test.done()
+
   "unbind()":
     "unbind events without namespace": (test) ->
       test.expect 1
-      o = Evented.create()
+      o = Evented.new()
       o.bind "event.namespace", -> test.ok true
       o.bind "event.namespace2", -> test.ok true
       o.bind "event", -> test.ok true
@@ -47,7 +63,7 @@ exports.Taxi =
       test.done()
 
     "unbind events with namespace": (test) ->
-      o = Evented.create()
+      o = Evented.new()
 
       test.expect 2
 
@@ -61,7 +77,7 @@ exports.Taxi =
       test.done()
 
     "unbind all events": (test) ->
-      o = Evented.create()
+      o = Evented.new()
 
       test.expect 0
 
@@ -78,25 +94,25 @@ exports.Taxi =
     # taxi overrides the default Pathology property with one that triggers events
     "triggers on change": (test) ->
       test.expect 1
-      o = Evented.create()
+      o = Evented.new()
       o.key.bind "change", -> test.ok(true); test.done()
       o.key.set("value")
 
   "bindPath()":
     "triggers events bound on a path": (test) ->
-      o = Evented.create()
+      o = Evented.new()
       path = o.bindPath ['key'], -> test.done()
       o.key.set("newvalue")
 
     "and re-binds events when objects along the path change": (test) ->
       test.expect 2
 
-      root = Evented.create()
-      a = Evented.create()
-      b = Evented.create()
+      root = Evented.new()
+      a = Evented.new()
+      b = Evented.new()
       End = Evented.extend()
       End.property("endkey")
-      end = End.create()
+      end = End.new()
 
       path = root.bindPath ['key','key', 'endkey'], -> test.ok true
       root.key.set(a)

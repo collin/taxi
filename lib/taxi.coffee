@@ -1,7 +1,8 @@
 puts = console.log
 Pathology = require "pathology"
-Taxi = module.exports = Pathology.Namespace.create("Taxi")
-{isString, concat, flatten, map, invoke, compact, slice, toArray, pluck, indexOf, include, last, any} = require "underscore"
+Taxi = module.exports = Pathology.Namespace.new("Taxi")
+{isString, concat, flatten, map, unshift, invoke, compact, slice, toArray, pluck, indexOf, include, last, any} = require "underscore"
+_ = require("underscore")
 
 EVENT_NAMESPACER = /\.([\w-_]+)$/
 
@@ -33,28 +34,31 @@ specParser = (fn) ->
     parsedSpec = parseSpec(rawSpec)
     fn.apply this, [parseSpec(rawSpec), toArray(arguments)[1..]]
 
-Taxi.Spec = Pathology.Object.extend
-  initialize: (spec) ->
+Taxi.Spec = Pathology.Object.extend ({def}) ->
+  def initialize: (spec) ->
     {@path, @namespace, @context, @handler} = spec
 
-  invoke: (_arguments) ->
+  def invoke: (_arguments) ->
     @handler.apply(@context, _arguments)
 
-Taxi.Path = Pathology.Object.extend
-  initialize: (@root, @handler) ->
+  def invokeAsAll: (realEvent, _arguments) ->
+    @handler.apply(@context, _(arguments).unshift(realEvent))
+
+Taxi.Path = Pathology.Object.extend ({def}) ->
+  def initialize: (@root, @handler) ->
     @segments = []
 
-  addSegment: (segment) ->
+  def addSegment: (segment) ->
     # puts "addSegment", segment
-    @segments.push _segment = Taxi.Segment.create(this, segment)
+    @segments.push _segment = Taxi.Segment.new(this, segment)
     _segment.rebind()
     _segment
 
-  segmentsAfter: (segment) ->
+  def segmentsAfter: (segment) ->
     index = indexOf @segments, segment
     @segments[index+1..]
 
-  readToSegment: (segment) ->
+  def readToSegment: (segment) ->
     index = indexOf @segments, segment   
     @root.readPath 
     targets = [@root]
@@ -66,12 +70,12 @@ Taxi.Path = Pathology.Object.extend
     lastSegment = last properties
     return (compact map targets, (target) -> target[lastSegment])
 
-Taxi.Segment = Pathology.Object.extend
-  initialize: (@path, @value) ->
+Taxi.Segment = Pathology.Object.extend ({def}) ->
+  def initialize: (@path, @value) ->
     @namespace = "."+Pathology.id()
     @boundObjects = []
 
-  binds: (source, event, callback) ->
+  def binds: (source, event, callback) ->
     return unless source
     @boundObjects.push(source) unless include @boundObjects, source
 
@@ -81,87 +85,94 @@ Taxi.Segment = Pathology.Object.extend
       handler: callback
       context: this
 
-  rebind: ->
+  def rebind: ->
     @revokeBindings()
     @readSourceProperties()
     @applyBindings()
 
-  revokeBindings: ->
+  def revokeBindings: ->
     object.unbind(@namespace) for object in @boundObjects
     @boundObjects = []
 
-  applyBindings: ->
+  def applyBindings: ->
     for property in @sourceProperties
       @binds property, 'change', @sourcePropertyChanged
 
-  readSourceProperties: ->
+  def readSourceProperties: ->
     @sourceProperties = @path.readToSegment(this)
 
-  isLastSegment: -> not any @followingSegments()
+  def isLastSegment: -> not any @followingSegments()
 
-  sourcePropertyChanged: ->
+  def sourcePropertyChanged: ->
     if @isLastSegment()
       @path.handler.call()
     else
       @rebind()
       segment.rebind() for segment in @followingSegments()
 
-  followingSegments: ->
+  def followingSegments: ->
     @path.segmentsAfter(this)
 
-Taxi.Mixin = Pathology.Mixin.create
-  included: ->
+Taxi.Mixin = Pathology.Module.extend ({def, defs}) ->
+  defs included: ->
 
-  static:
-    property: (name) ->
-      Taxi.Property.create(name, this)
+  defs property: (name) ->
+    Taxi.Property.new(name, this)
       
-  instance:
-    bindPath: (path, handler) ->
-      _path = Taxi.Path.create(this, handler)
-      _path.addSegment(segment) for segment in path
-      _path
+  def bindPath: (path, handler) ->
+    _path = Taxi.Path.new(this, handler)
+    _path.addSegment(segment) for segment in path
+    _path
 
 
-    bind: specParser (spec, _arguments) ->
-      @_callbacks ?= new Object
-      spec.context ?= this
-      spec.handler ?= _arguments[0]
-      # TODO: ASSERT spec.handler
-      # Pathology.assert MUST_HAVE_HANDLER, spec.handler
-      
-      @_callbacks[spec.event] ?= {}
-      @_callbacks[spec.event][spec.namespace] ?= []
-      @_callbacks[spec.event][spec.namespace].push Taxi.Spec.create(spec)
+  def bind: specParser (spec, _arguments) ->
+    @_callbacks ?= new Object
+    spec.context ?= this
+    spec.handler ?= _arguments[0]
+    # TODO: ASSERT spec.handler
+    # Pathology.assert MUST_HAVE_HANDLER, spec.handler
+    
+    @_callbacks[spec.event] ?= {}
+    @_callbacks[spec.event][spec.namespace] ?= []
+    @_callbacks[spec.event][spec.namespace].push Taxi.Spec.new(spec)
 
-    unbind: specParser (spec, _arguments) ->
-      return unless @_callbacks
-      if spec.namespace is 'none' and spec.event isnt NO_EVENT
-        delete @_callbacks[spec.event]
-      else if spec.namespace is 'none' and spec.event is NO_EVENT
-        delete @_callbacks
-      else if spec.namespace isnt 'none' and spec.event isnt NO_EVENT
-        delete @_callbacks[spec.event][spec.namespace]
-      else if spec.namespace isnt 'none' and spec.event is NO_EVENT
-        for event, namespaces of @_callbacks
-          delete namespaces[spec.namespace]
+  def unbind: specParser (spec, _arguments) ->
+    return unless @_callbacks
+    if spec.namespace is 'none' and spec.event isnt NO_EVENT
+      delete @_callbacks[spec.event]
+    else if spec.namespace is 'none' and spec.event is NO_EVENT
+      delete @_callbacks
+    else if spec.namespace isnt 'none' and spec.event isnt NO_EVENT
+      delete @_callbacks[spec.event][spec.namespace]
+    else if spec.namespace isnt 'none' and spec.event is NO_EVENT
+      for event, namespaces of @_callbacks
+        delete namespaces[spec.namespace]
 
-    trigger: specParser (spec, _arguments) ->
-      return unless @_callbacks
-      if spec.namespace is 'none'
-        for namespace, specs of @_callbacks[spec.event]
-          _spec.invoke(_arguments) for _spec in specs
-      else
-        for _spec in @_callbacks[spec.event][spec.namespace]
-          _spec.invoke(_arguments)
+  def trigger: specParser (spec, _arguments) ->
+    # TODO: throw error if attempting to trigger 'all'
+    return unless @_callbacks
+    if spec.namespace is 'none'
+      for namespace, specs of @_callbacks[spec.event]
+        _spec.invoke(_arguments) for _spec in specs
+
+      for namespace, specs of @_callbacks.all ? []
+        _spec.invokeAsAll(spec.event, _arguments) for _spec in specs
+
+    else
+      for _spec in @_callbacks[spec.event][spec.namespace]
+        _spec.invoke(_arguments)
+
+      for _spec in @_callbacks.all?[spec.namespace] ? []
+        _spec.invokeAsAll(spec.event, _arguments)
 
 # Specify on multiple lines to retain object paths.
-Taxi.Property = Pathology.Property.extend()
-Taxi.Property.Instance = Pathology.Property.Instance.extend
-  set: (value) ->
-    return value if value is @value
-    @value = value
-    @trigger "change"
-    value
+Taxi.Property = Pathology.Property.extend ->
+  @Instance = Pathology.Property.Instance.extend ({def, include}) ->
+    @include Taxi.Mixin
 
-Taxi.Mixin.extends Taxi.Property.Instance
+    def set: (value) ->
+      return value if value is @value
+      @value = value
+      @trigger "change"
+      value
+
