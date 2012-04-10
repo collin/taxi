@@ -1,8 +1,9 @@
-puts = console.log
 Pathology = require "pathology"
 Taxi = module.exports = Pathology.Namespace.new("Taxi")
-{isString, concat, flatten, map, unshift, invoke, compact, slice, toArray, pluck, indexOf, include, last, any} = require "underscore"
+{isString, concat, flatten, unique, map, unshift, invoke, compact, slice, toArray, pluck, indexOf, include, last, any} = require "underscore"
 _ = require("underscore")
+console.traceAlways = true
+puts = console.log
 
 EVENT_NAMESPACER = /\.([\w-_]+)$/
 
@@ -42,80 +43,88 @@ Taxi.Spec = Pathology.Object.extend ({def}) ->
     @handler.apply(@context, _arguments)
 
   def invokeAsAll: (realEvent, _arguments) ->
-    @handler.apply(@context, _(arguments).unshift(realEvent))
+    @handler.apply(@context, _(_arguments).unshift(realEvent))
 
 Taxi.Path = Pathology.Object.extend ({def}) ->
   def initialize: (@root, @handler) ->
-    @segments = []
+    @segments = new Array
 
   def addSegment: (segment) ->
-    # puts "addSegment", segment
-    @segments.push _segment = Taxi.Segment.new(this, segment)
+    @segments.push( _segment = Taxi.Segment.new(this, segment) )
     _segment.rebind()
     _segment
 
+  def segmentBefore: (segment) ->
+    index = indexOf @segments, segment
+    @segments[ index - 1 ]
+
   def segmentsAfter: (segment) ->
     index = indexOf @segments, segment
-    @segments[index+1..]
+    @segments[(index+1)..]
 
-  def readToSegment: (segment) ->
-    index = indexOf @segments, segment   
-    @root.readPath 
-    targets = [@root]
-    properties = pluck(@segments[..index], 'value')
-    for property in properties[..-2]
-      targets = compact flatten map targets, (target) -> 
-        invoke target.propertiesThatCouldBe(property), 'get'
-
-    lastSegment = last properties
-    return (compact map targets, (target) -> target[lastSegment])
+  def readToSegment: (segment) -> 
+    segment.readToSelf(@root, @segments)
 
 Taxi.Segment = Pathology.Object.extend ({def}) ->
+  def inspect: ->
+    "@value: #{@value}"
+
   def initialize: (@path, @value) ->
-    @namespace = "."+Pathology.id()
-    @boundObjects = []
+    @namespaces = Pathology.Map.new( -> "."+Pathology.id() )
+    @boundObjects = Pathology.Set.new()
 
-  def binds: (source, event, callback) ->
-    return unless source
-    @boundObjects.push(source) unless include @boundObjects, source
+  def root: -> @path.root
+    
+  def previousObjects: ->
+    @path.segmentBefore(this)?.objects() or [@root()]
+    
+  def properties: () ->
+    properties = []
+    objects = @previousObjects()
+    for object in objects
+      properties = properties.concat object.propertiesThatCouldBe(@value)
+    
+    properties
 
-    source.bind
+  def objects: ->
+    objects = []
+    for property in @properties()
+      objects = objects.concat property.objects()
+
+    objects
+
+  def applyBindings: ->
+    for property in @properties()
+      property.bindToPathSegment(this)
+
+  def binds: (object, event, callback) ->
+    namespace = @namespaces.get(object)
+    @boundObjects.add(object)
+    object.bind 
       event: event
-      namespace: @namespace
+      namespace: namespace
       handler: callback
       context: this
 
   def rebind: ->
     @revokeBindings()
-    @readSourceProperties()
     @applyBindings()
 
   def revokeBindings: ->
-    object.unbind(@namespace) for object in @boundObjects
-    @boundObjects = []
+    @boundObjects.each (object) ->
+      namespace = @namespaces.get(object)
+      object.unbind(namespace)
+    
+    @boundObjects.empty()
+    
+  def changeCallback: ->
+    @path.handler()
 
-  def applyBindings: ->
-    for property in @sourceProperties
-      @binds property, 'change', @sourcePropertyChanged
+  def insertCallback: (object) ->
 
-  def readSourceProperties: ->
-    @sourceProperties = @path.readToSegment(this)
-
-  def isLastSegment: -> not any @followingSegments()
-
-  def sourcePropertyChanged: ->
-    if @isLastSegment()
-      @path.handler.call()
-    else
-      @rebind()
-      segment.rebind() for segment in @followingSegments()
-
-  def followingSegments: ->
-    @path.segmentsAfter(this)
-
+  def removeCallback: (object) ->
+    
 Taxi.Mixin = Pathology.Module.extend ({def, defs}) ->
-  defs included: ->
-
   defs property: (name) ->
     Taxi.Property.new(name, this)
       
@@ -123,7 +132,6 @@ Taxi.Mixin = Pathology.Module.extend ({def, defs}) ->
     _path = Taxi.Path.new(this, handler)
     _path.addSegment(segment) for segment in path
     _path
-
 
   def bind: specParser (spec, _arguments) ->
     @_callbacks ?= new Object
@@ -166,13 +174,23 @@ Taxi.Mixin = Pathology.Module.extend ({def, defs}) ->
         _spec.invokeAsAll(spec.event, _arguments)
 
 # Specify on multiple lines to retain object paths.
-Taxi.Property = Pathology.Property.extend ->
-  @Instance = Pathology.Property.Instance.extend ({def, include}) ->
-    @include Taxi.Mixin
+Taxi.Property = Pathology.Property.extend ({delegate, include, def, defs}) ->
 
-    def set: (value) ->
-      return value if value is @value
-      @value = value
-      @trigger "change"
-      value
+Taxi.Property.Instance = Pathology.Property.Instance.extend ({delegate, include, def, defs}) ->
+  include Taxi.Mixin
 
+  def bindToPathSegment: (segment) ->
+    segment.binds this, "change", segment.changeCallback
+
+  def objects: -> 
+    if @value then [@value] else []
+
+  def set: (value) ->
+    return value if value is @value
+    @value = value
+    @trigger "change"
+    value
+
+      
+
+  

@@ -1,6 +1,7 @@
 puts = console.log
 Taxi = require("./../lib/taxi")
 Pathology = require("pathology")
+require('console-trace')
 
 {extend} = require("underscore")
 
@@ -101,8 +102,28 @@ exports.Taxi =
   "bindPath()":
     "triggers events bound on a path": (test) ->
       o = Evented.new()
-      path = o.bindPath ['key'], -> test.done()
+      o.bindPath ['key'], -> test.done()
       o.key.set("newvalue")
+
+     "binds along nested path": (test) ->
+        test.expect(3)
+        End = NS.End = Evented.extend()
+        End.property("endkey")
+
+        end = End.new()
+        middle = Evented.new()
+        root = Evented.new()
+        
+        middle.key.set end
+        root.key.set middle
+
+        end.bindPath ['endkey'], -> test.ok(true)
+        middle.bindPath ['key', 'endkey'], -> test.ok(true)
+        root.bindPath ['key', 'key', 'endkey'], -> test.ok(true)
+        
+        end.endkey.set("done")
+        test.done()
+
 
     "and re-binds events when objects along the path change": (test) ->
       test.expect 2
@@ -123,6 +144,8 @@ exports.Taxi =
       b.key.set(end)
       end.endkey.set("foo")
       end.endkey.set("bar")
+      b.key.set(null)
+      end.endkey.set("bazbat")
 
       test.done()
 
