@@ -99,8 +99,7 @@ Taxi.Segment = Pathology.Object.extend ({def}) ->
   def applyBindings: (properties = @properties()) ->
     for property in properties
       property.bindToPathSegment(this)
-
-    bindToObject(object) for object in @objects()
+      @bindToObject(member) for member in property.members()
 
   def binds: (object, event, callback) ->
     namespace = @namespaces.get(object)
@@ -116,23 +115,27 @@ Taxi.Segment = Pathology.Object.extend ({def}) ->
     @applyBindings()
 
   def revokeBindings: ->
-    @boundObjects.each (object) ->
+    @boundObjects.each (object) =>
       namespace = @namespaces.get(object)
       object.unbind(namespace)
     
     @boundObjects.empty()
     
-  bindToObject: (object) ->
+  def bindToObject: (object) ->
     @applyBindings object.propertiesThatCouldBe(@value)
 
-  revokeObjectBindings: (object) ->
+  def revokeObjectBindings: (object) ->
     for property in object.propertiesThatCouldBe(@value)
       namespace = @namespaces.get(property)
       property.unbind(namespace)
       @boundObjects.del(property)
 
   def changeCallback: ->
-    @path.handler()
+    if @path.segmentAfter(this)
+      @rebind()
+      segment.rebind() for segment in @path.segmentsAfter(this)
+    else
+      @path.handler()
 
   def insertCallback: (item, collection) ->
     return unless segment = @path.segmentAfter(this)
@@ -199,10 +202,11 @@ Taxi.Property.Instance = Pathology.Property.Instance.extend ({delegate, include,
 
   def bindToPathSegment: (segment) ->
     segment.binds this, "change", segment.changeCallback
-    # segment.binds this, "add", (item) ->
-    # segment.binds this, "remove", (item) ->
 
-  def objects: -> []
+  def objects: ->
+    if @value then [@value] else []
+
+  def members: -> []
 
   def set: (value) ->
     return value if value is @value
