@@ -1,7 +1,6 @@
 puts = console.log
 Taxi = require("./../lib/taxi")
 Pathology = require("pathology")
-require('console-trace')
 
 {extend} = require("underscore")
 
@@ -123,7 +122,6 @@ exports.Taxi =
         
         end.endkey.set("done")
         test.done()
-
 
     "and re-binds events when objects along the path change": (test) ->
       test.expect 2

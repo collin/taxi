@@ -2,7 +2,6 @@ Pathology = require "pathology"
 Taxi = module.exports = Pathology.Namespace.new("Taxi")
 {isString, concat, flatten, unique, map, unshift, invoke, compact, slice, toArray, pluck, indexOf, include, last, any} = require "underscore"
 _ = require("underscore")
-console.traceAlways = true
 puts = console.log
 
 EVENT_NAMESPACER = /\.([\w-_]+)$/
@@ -58,6 +57,10 @@ Taxi.Path = Pathology.Object.extend ({def}) ->
     index = indexOf @segments, segment
     @segments[ index - 1 ]
 
+  def segmentAfter: (segment) ->
+    index = indexOf @segments, segment
+    @segments[ index + 1 ]    
+
   def segmentsAfter: (segment) ->
     index = indexOf @segments, segment
     @segments[(index+1)..]
@@ -93,9 +96,11 @@ Taxi.Segment = Pathology.Object.extend ({def}) ->
 
     objects
 
-  def applyBindings: ->
-    for property in @properties()
+  def applyBindings: (properties = @properties()) ->
+    for property in properties
       property.bindToPathSegment(this)
+
+    bindToObject(object) for object in @objects()
 
   def binds: (object, event, callback) ->
     namespace = @namespaces.get(object)
@@ -117,12 +122,25 @@ Taxi.Segment = Pathology.Object.extend ({def}) ->
     
     @boundObjects.empty()
     
+  bindToObject: (object) ->
+    @applyBindings object.propertiesThatCouldBe(@value)
+
+  revokeObjectBindings: (object) ->
+    for property in object.propertiesThatCouldBe(@value)
+      namespace = @namespaces.get(property)
+      property.unbind(namespace)
+      @boundObjects.del(property)
+
   def changeCallback: ->
     @path.handler()
 
-  def insertCallback: (object) ->
+  def insertCallback: (item, collection) ->
+    return unless segment = @path.segmentAfter(this)
+    segment.bindToObject(item)
 
-  def removeCallback: (object) ->
+  def removeCallback: (item, collection) ->
+    return unless segment = @path.segmentAfter(this)
+    segment.revokeObjectBindings(item)
     
 Taxi.Mixin = Pathology.Module.extend ({def, defs}) ->
   defs property: (name) ->
@@ -181,9 +199,10 @@ Taxi.Property.Instance = Pathology.Property.Instance.extend ({delegate, include,
 
   def bindToPathSegment: (segment) ->
     segment.binds this, "change", segment.changeCallback
+    # segment.binds this, "add", (item) ->
+    # segment.binds this, "remove", (item) ->
 
-  def objects: -> 
-    if @value then [@value] else []
+  def objects: -> []
 
   def set: (value) ->
     return value if value is @value

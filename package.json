@@ -17,5 +17,7 @@
     "underscore": "latest",
     "pathology": "latest"
   },
-  "devDependencies": {}
+  "devDependencies": {
+    "console-trace": "latest"
+  }
 }
