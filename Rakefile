@@ -96,7 +96,7 @@ task :release, [:version] => :test do |t, args|
   system "git commit -m 'bumped version to #{args[:version]}'"
   system "git tag #{args[:version]}"
   system "git push origin master"
-  system "git push #{args[:version]}"
+  system "git push origin #{args[:version]}"
   Rake::Task[:upload].invoke
 end
 
