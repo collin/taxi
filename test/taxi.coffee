@@ -1,149 +1,154 @@
-puts = console.log
-Taxi = require("./../lib/taxi")
-Pathology = require("pathology")
-
-{extend} = require("underscore")
-
+{extend} = _
 
 NS = Pathology.Namespace.new("NS")
 Evented = NS.Evented = Pathology.Object.extend()
 Evented.include Taxi.Mixin
 Evented.property("key")
 
-exports.Taxi =
-  "bind()/trigger()":
-    "trigger events without namespace": (test) ->
-      test.expect 3
-      o = Evented.new()
-      o.bind "event.namespace", -> test.ok true
-      o.bind "event.namespace2", -> test.ok true
-      o.bind "event", -> test.ok true
-      o.trigger "event"
+module  "Taxi.bind()/trigger()"
+test "trigger events without namespace", ->
+  expect 3
+  o = Evented.new()
+  o.bind "event.namespace", -> ok true
+  o.bind "event.namespace2", -> ok true
+  o.bind "event", -> ok true
+  o.trigger "event"
 
-      test.done()
+test "trigger events with namespace", ->
+  expect 1
+  o = Evented.new()
+  o.bind "event2.namespace2", -> ok true
+  o.bind "event.namespace2", -> ok true
+  o.bind "event", -> ok true
+  o.trigger "event.namespace2"
 
-    "trigger events with namespace": (test) ->
-      test.expect 1
-      o = Evented.new()
-      o.bind "event2.namespace2", -> test.ok true
-      o.bind "event.namespace2", -> test.ok true
-      o.bind "event", -> test.ok true
-      o.trigger "event.namespace2"
+test "all events are triggerd on 'all' bindings", ->
+  expect 3
+  o = Evented.new()
+  o.bind "all", -> ok true
+  o.trigger "one"
+  o.trigger "two"
+  o.trigger "three"
 
-      test.done()
+test "'all' events pass through the real event name", ->
+  expect 1
+  o = Evented.new()
+  o.bind "all", (realEvent) -> equal "mccoy", realEvent
+  o.trigger("mccoy")
 
-    "all events are triggerd on 'all' bindings": (test) ->
-      test.expect 3
-      o = Evented.new()
-      o.bind "all", -> test.ok true
-      o.trigger "one"
-      o.trigger "two"
-      o.trigger "three"
-      test.done()
+module  "unbind()"
+test "unbind events without namespace", ->
+  expect 1
+  o = Evented.new()
+  o.bind "event.namespace", -> ok true
+  o.bind "event.namespace2", -> ok true
+  o.bind "event", -> ok true
+  o.unbind ".namespace2"
+  o.unbind "event.namespace"
+  o.trigger "event"
+  o.trigger "event2"
 
-    "'all' events pass through the real event name": (test) ->
-      test.expect 1
-      o = Evented.new()
-      o.bind "all", (realEvent) -> test.equal "mccoy", realEvent
-      o.trigger("mccoy")
-      test.done()
+test "unbind events with namespace", ->
+  o = Evented.new()
 
-  "unbind()":
-    "unbind events without namespace": (test) ->
-      test.expect 1
-      o = Evented.new()
-      o.bind "event.namespace", -> test.ok true
-      o.bind "event.namespace2", -> test.ok true
-      o.bind "event", -> test.ok true
-      o.unbind ".namespace2"
-      o.unbind "event.namespace"
-      o.trigger "event"
-      o.trigger "event2"
+  expect 2
 
-      test.done()
+  o.bind "event.namespace", -> ok true
+  o.bind "event.namespace2", -> ok true
+  o.bind "event", -> ok true
 
-    "unbind events with namespace": (test) ->
-      o = Evented.new()
+  o.unbind(".namespace2")
+  o.trigger "event"
 
-      test.expect 2
+test "unbind all events", ->
+  o = Evented.new()
 
-      o.bind "event.namespace", -> test.ok true
-      o.bind "event.namespace2", -> test.ok true
-      o.bind "event", -> test.ok true
+  expect 0
 
-      o.unbind(".namespace2")
-      o.trigger "event"
+  o.bind "event.namespace", -> ok true
+  o.bind "event.namespace2", -> ok true
+  o.bind "event", -> ok true
 
-      test.done()
+  o.unbind()
+  o.trigger "event"
 
-    "unbind all events": (test) ->
-      o = Evented.new()
+module  "Map"
+test "triggers on change", ->
+  expect 1
+  m = Taxi.Map.new()
+  m.bind "change", (key, value) -> deepEqual ["key", "value"], [key, value]
+  m.set "key", "value"
 
-      test.expect 0
+module  "Taxi property()"
+# taxi overrides the default Pathology property with one that triggers events
+test "triggers on change", ->
+  expect 1
+  o = Evented.new()
+  o.key.bind "change", -> ok(true)
+  o.key.set("value")
 
-      o.bind "event.namespace", -> test.ok true
-      o.bind "event.namespace2", -> test.ok true
-      o.bind "event", -> test.ok true
+module  "bindPath()"
+test "triggers events bound on a path", ->
+  expect 1
+  o = Evented.new()
+  o.bindPath ['key'], -> ok(true)
+  o.key.set("newvalue")
 
-      o.unbind()
-      o.trigger "event"
+test "binds along nested path", ->
+  expect(3)
+  End = NS.End = Evented.extend()
+  End.property("endkey")
 
-      test.done()
+  end = End.new()
+  middle = Evented.new()
+  root = Evented.new()
 
-  "property()":
-    # taxi overrides the default Pathology property with one that triggers events
-    "triggers on change": (test) ->
-      test.expect 1
-      o = Evented.new()
-      o.key.bind "change", -> test.ok(true); test.done()
-      o.key.set("value")
+  middle.key.set end
+  root.key.set middle
 
-  "bindPath()":
-    "triggers events bound on a path": (test) ->
-      o = Evented.new()
-      o.bindPath ['key'], -> test.done()
-      o.key.set("newvalue")
+  end.bindPath ['endkey'], -> ok(true)
+  middle.bindPath ['key', 'endkey'], -> ok(true)
+  root.bindPath ['key', 'key', 'endkey'], -> ok(true)
 
-     "binds along nested path": (test) ->
-        test.expect(3)
-        End = NS.End = Evented.extend()
-        End.property("endkey")
+  end.endkey.set("done")
 
-        end = End.new()
-        middle = Evented.new()
-        root = Evented.new()
-        
-        middle.key.set end
-        root.key.set middle
+test "and re-binds events when objects along the path change", ->
+  expect 3
 
-        end.bindPath ['endkey'], -> test.ok(true)
-        middle.bindPath ['key', 'endkey'], -> test.ok(true)
-        root.bindPath ['key', 'key', 'endkey'], -> test.ok(true)
-        
-        end.endkey.set("done")
-        test.done()
+  root = Evented.new()
+  a = Evented.new()
+  b = Evented.new()
+  End = Evented.extend()
+  End.property("endkey")
+  end = End.new()
 
-    "and re-binds events when objects along the path change": (test) ->
-      test.expect 2
+  path = root.bindPath ['key','key', 'endkey'], -> ok true
+  root.key.set(a)
+  a.key.set(end)
+  end.endkey.set("foo")
 
-      root = Evented.new()
-      a = Evented.new()
-      b = Evented.new()
-      End = Evented.extend()
-      End.property("endkey")
-      end = End.new()
+  root.key.set(b)
+  b.key.set(end)
+  end.endkey.set("foo")
+  end.endkey.set("bar")
+  b.key.set(null)
+  end.endkey.set("bazbat")
 
-      path = root.bindPath ['key','key', 'endkey'], -> test.ok true
-      root.key.set(a)
-      a.key.set(end)
-      end.endkey.set("foo")
+test "triggers event when last item is re-boud", ->
+  expect 2
 
-      root.key.set(b)
-      b.key.set(end)
-      end.endkey.set("foo")
-      end.endkey.set("bar")
-      b.key.set(null)
-      end.endkey.set("bazbat")
+  root = Evented.new()
+  a = Evented.new()
+  b = Evented.new()
+  End = Evented.extend()
+  End.property("endkey")
+  end = End.new()
+  end.endkey.set("ended")
 
-      test.done()
+  a.key.set(end)
+  b.key.set(end)
 
+  path = root.bindPath ['key','key', 'endkey'], -> ok true
+
+  root.key.set(a)
+  root.key.set(b)

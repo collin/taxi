@@ -1,10 +1,11 @@
-Pathology = require "pathology"
-Taxi = module.exports = Pathology.Namespace.new("Taxi")
-{isString, concat, flatten, unique, map, unshift, invoke, compact, slice, toArray, pluck, indexOf, include, last, any} = require "underscore"
-_ = require("underscore")
-puts = console.log
+require "pathology"
+require "underscore"
+{clone, isString, concat, flatten, unique, map, unshift, invoke, compact,
+slice, toArray, pluck, indexOf, include, last, any} = _
 
 EVENT_NAMESPACER = /\.([\w-_]+)$/
+
+Taxi = window.Taxi = Pathology.Namespace.new("Taxi")
 
 NO_EVENT = toString: "NO_EVENT"
 parseSpec = (raw) ->
@@ -27,6 +28,8 @@ parseSpec = (raw) ->
     spec = raw
     spec.namespace = spec.namespace?.replace(/^\./, "") or "none"
 
+  spec.event ?= NO_EVENT
+
   return spec
 
 specParser = (fn) ->
@@ -42,16 +45,23 @@ Taxi.Spec = Pathology.Object.extend ({def}) ->
     @handler.apply(@context, _arguments)
 
   def invokeAsAll: (realEvent, _arguments) ->
-    @handler.apply(@context, _(_arguments).unshift(realEvent))
+    @handler.apply(@context, _(clone _arguments).unshift(realEvent))
 
 Taxi.Path = Pathology.Object.extend ({def}) ->
   def initialize: (@root, @handler) ->
     @segments = new Array
 
+  def inspect: ->
+    "segments: " + _(@segments).pluck('value').join(",")
+
+
   def addSegment: (segment) ->
     @segments.push( _segment = Taxi.Segment.new(this, segment) )
     _segment.rebind()
     _segment
+
+  def lastSegment: ->
+    _.last @segments
 
   def segmentBefore: (segment) ->
     index = indexOf @segments, segment
@@ -59,13 +69,13 @@ Taxi.Path = Pathology.Object.extend ({def}) ->
 
   def segmentAfter: (segment) ->
     index = indexOf @segments, segment
-    @segments[ index + 1 ]    
+    @segments[ index + 1 ]
 
   def segmentsAfter: (segment) ->
     index = indexOf @segments, segment
     @segments[(index+1)..]
 
-  def readToSegment: (segment) -> 
+  def readToSegment: (segment) ->
     segment.readToSelf(@root, @segments)
 
 Taxi.Segment = Pathology.Object.extend ({def}) ->
@@ -73,20 +83,20 @@ Taxi.Segment = Pathology.Object.extend ({def}) ->
     "@value: #{@value}"
 
   def initialize: (@path, @value) ->
-    @namespaces = Pathology.Map.new( -> "."+Pathology.id() )
+    @namespaces = Pathology.Map.new( -> Pathology.id() )
     @boundObjects = Pathology.Set.new()
 
   def root: -> @path.root
-    
+
   def previousObjects: ->
     @path.segmentBefore(this)?.objects() or [@root()]
-    
+
   def properties: () ->
     properties = []
     objects = @previousObjects()
     for object in objects
       properties = properties.concat object.propertiesThatCouldBe(@value)
-    
+
     properties
 
   def objects: ->
@@ -97,6 +107,7 @@ Taxi.Segment = Pathology.Object.extend ({def}) ->
     objects
 
   def applyBindings: (properties = @properties()) ->
+    # console.log "applyBindings", @, properties
     for property in properties
       property.bindToPathSegment(this)
       @bindToObject(member) for member in property.members()
@@ -104,7 +115,7 @@ Taxi.Segment = Pathology.Object.extend ({def}) ->
   def binds: (object, event, callback) ->
     namespace = @namespaces.get(object)
     @boundObjects.add(object)
-    object.bind 
+    object.bind
       event: event
       namespace: namespace
       handler: callback
@@ -117,23 +128,26 @@ Taxi.Segment = Pathology.Object.extend ({def}) ->
   def revokeBindings: ->
     @boundObjects.each (object) =>
       namespace = @namespaces.get(object)
-      object.unbind(namespace)
-    
+      object.unbind("."+namespace)
+
     @boundObjects.empty()
-    
+
   def bindToObject: (object) ->
     @applyBindings object.propertiesThatCouldBe(@value)
 
   def revokeObjectBindings: (object) ->
     for property in object.propertiesThatCouldBe(@value)
       namespace = @namespaces.get(property)
-      property.unbind(namespace)
+      property.unbind("."+namespace)
       @boundObjects.del(property)
 
   def changeCallback: ->
+    # console.log "changeCallback", @, @path
     if @path.segmentAfter(this)
       @rebind()
       segment.rebind() for segment in @path.segmentsAfter(this)
+      last = @path.lastSegment()
+      @path.handler() if _(last.objects()).any()
     else
       @path.handler()
 
@@ -144,14 +158,16 @@ Taxi.Segment = Pathology.Object.extend ({def}) ->
   def removeCallback: (item, collection) ->
     return unless segment = @path.segmentAfter(this)
     segment.revokeObjectBindings(item)
-    
+
 Taxi.Mixin = Pathology.Module.extend ({def, defs}) ->
   defs property: (name) ->
     Taxi.Property.new(name, this)
-      
+
   def bindPath: (path, handler) ->
+    @pathBindings ?= []
     _path = Taxi.Path.new(this, handler)
     _path.addSegment(segment) for segment in path
+    @pathBindings.push _path
     _path
 
   def bind: specParser (spec, _arguments) ->
@@ -160,7 +176,7 @@ Taxi.Mixin = Pathology.Module.extend ({def, defs}) ->
     spec.handler ?= _arguments[0]
     # TODO: ASSERT spec.handler
     # Pathology.assert MUST_HAVE_HANDLER, spec.handler
-    
+
     @_callbacks[spec.event] ?= {}
     @_callbacks[spec.event][spec.namespace] ?= []
     @_callbacks[spec.event][spec.namespace].push Taxi.Spec.new(spec)
@@ -194,11 +210,27 @@ Taxi.Mixin = Pathology.Module.extend ({def, defs}) ->
       for _spec in @_callbacks.all?[spec.namespace] ? []
         _spec.invokeAsAll(spec.event, _arguments)
 
+    return undefined
+
+Taxi.Map = Pathology.Map.extend ({delegate, include, def, defs}) ->
+  include Taxi.Mixin
+
+  def set: (key, value) ->
+    @_super.apply(this, arguments)
+    @trigger "change", key, value
+    value
+
 # Specify on multiple lines to retain object paths.
-Taxi.Property = Pathology.Property.extend ({delegate, include, def, defs}) ->
+Taxi.Property = Pathology.Property
 
 Taxi.Property.Instance = Pathology.Property.Instance.extend ({delegate, include, def, defs}) ->
   include Taxi.Mixin
+
+  def addDependant: (dependant) ->
+    (@dependants ?= []).push dependant
+
+  def triggerDependants: ->
+    dependant.triggerFor() for dependant in (@dependants ? [])
 
   def bindToPathSegment: (segment) ->
     segment.binds this, "change", segment.changeCallback
@@ -210,10 +242,14 @@ Taxi.Property.Instance = Pathology.Property.Instance.extend ({delegate, include,
 
   def set: (value) ->
     return value if value is @value
+    oldvalue = @value
     @value = value
-    @trigger "change"
+    @object.trigger("change")
+    @object.trigger("change:#{@options.name}")
+    @trigger "change", @value, oldvalue
+    @triggerDependants()
     value
 
-      
+
 
   

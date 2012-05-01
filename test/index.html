@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>QUnit Test Suite</title>
+  <link rel="stylesheet" href="qunit/qunit.css" type="text/css" media="screen">
+  <script type="text/javascript" src="qunit/qunit.js"></script>
+  <script type="text/javascript" src="../vendor/minispade.js"></script>
+  <script type="text/javascript" src="../vendor/jquery.js"></script>
+  <script type="text/javascript" src="../vendor/underscore.js"></script>
+  <script type="text/javascript" src="../vendor/pathology.js"></script>
+  <script type="text/javascript" src="../dist/taxi-spade.js"></script>
+</head>
+<body>
+  <h1 id="qunit-header">QUnit Test Suite</h1>
+  <h2 id="qunit-banner"></h2>
+  <div id="qunit-testrunner-toolbar"></div>
+  <h2 id="qunit-userAgent"></h2>
+  <ol id="qunit-tests"></ol>
+  <div id="qunit-fixture">test markup</div>
+
+  <script type="text/javascript">
+    minispade.require('taxi');
+  </script>
+
+  <script type="text/javascript" src="../dist/taxi-test.js"></script>
+</body>
+</html>
