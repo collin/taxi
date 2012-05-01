@@ -1,6 +1,5 @@
 require "rake-pipeline-web-filters"
 require "json"
-require "./version"
 # require "uglifier"
 
 
@@ -22,7 +21,7 @@ end
 
 output "dist"
 input "lib" do
-  match "**/*.js" do
+  match "taxi.js" do
     minispade rewrite_requires: true, string: true, module_id_generator: proc { |input|
      id = input.path.dup
       id.sub!('/lib/', '/')
@@ -34,6 +33,10 @@ input "lib" do
     concat "taxi-spade.js"
   end
 
+end
+
+input "lib", "taxi.js" do
+  concat "taxi.js"
 end
 
 input "./src" do
@@ -52,7 +55,6 @@ input "./src" do
     concat "taxi-docs-spade.js"
   end
 end
-
 
 input "test", "taxi.coffee" do
   coffee_script { "taxi-test.js" }

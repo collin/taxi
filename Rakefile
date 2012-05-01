@@ -86,10 +86,10 @@ end
 desc "tag/upload release"
 task :release, [:version] => :test do |t, args|
   unless args[:version] and args[:version].match(/^[\d]+\.[\d]+\.[\d].*$/)
-    raise "SPECIFY A VERSION curent version: #{PATHOLOGY_VERSION}"
+    raise "SPECIFY A VERSION curent version: #{TAXI_VERSION}"
   end
   File.open("./version.rb", "w") do |f| 
-    f.write %|PATHOLOGY_VERSION = "#{args[:version]}"|
+    f.write %|TAXI_VERSION = "#{args[:version]}"|
   end
 
   system "git add version.rb"
