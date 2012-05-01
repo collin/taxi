@@ -81,3 +81,32 @@ task :phantomjs do
     abort "PhantomJS is not installed. Download from http://phantomjs.org"
   end
 end
+
+
+desc "tag/upload release"
+task :release, [:version] => :test do |t, args|
+  unless args[:version] and args[:version].match(/^[\d]+\.[\d]+\.[\d].*$/)
+    raise "SPECIFY A VERSION curent version: #{PATHOLOGY_VERSION}"
+  end
+  File.open("./version.rb", "w") do |f| 
+    f.write %|PATHOLOGY_VERSION = "#{args[:version]}"|
+  end
+
+  system "git add version.rb"
+  system "git commit -m 'bumped version to #{args[:version]}'"
+  system "git tag #{args[:version]}"
+  system "git push origin master"
+  system "git push #{args[:version]}"
+  Rake::Task[:upload].invoke
+end
+
+desc "upload versions"
+task :upload => :test do
+  uploader = GithubUploader.setup_uploader
+  GithubUploader.upload_file uploader, "taxi-#{TAXI_VERSION}.js", "Taxi #{TAXI_VERSION}", "dist/taxi.js"
+  GithubUploader.upload_file uploader, "taxi-#{TAXI_VERSION}-spade.js", "Taxi #{TAXI_VERSION} (minispade)", "dist/taxi-spade.js"
+  GithubUploader.upload_file uploader, "taxi-#{TAXI_VERSION}.html", "Taxi #{TAXI_VERSION} (html_package)", "dist/taxi.html"
+
+  GithubUploader.upload_file uploader, 'taxi-latest.js', "Current Taxi", "dist/taxi.js"
+  GithubUploader.upload_file uploader, 'taxi-latest-spade.js', "Current Taxi (minispade)", "dist/taxi-spade.js"
+end
