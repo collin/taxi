@@ -1,6 +1,6 @@
 require "pathology"
 require "underscore"
-{clone, isString, concat, flatten, unique, map, unshift, invoke, compact,
+{clone, isArray, isString, concat, flatten, unique, map, unshift, invoke, compact,
 slice, toArray, pluck, indexOf, include, last, any} = _
 
 EVENT_NAMESPACER = /\.([\w-_]+)$/
@@ -168,13 +168,12 @@ Taxi.Mixin = Pathology.Module.extend ({def, defs}) ->
   defs property: (name) ->
     Taxi.Property.new(name, this)
 
-  def bindPath: (paths..., handler) ->
+  def bindPath: (path, handler) ->
     @pathBindings ?= []
 
-    if paths.length > 1
-      return Taxi.Detour.new(this, paths, handler)
+    if isArray path[0]
+      return Taxi.Detour.new(this, path, handler)
     else
-      path = paths[0]
       _path = Taxi.Path.new(this, handler)
       _path.addSegment(segment) for segment in path
       @pathBindings.push _path

@@ -165,7 +165,7 @@ test "triggers handler for first path in detour", ->
   path1 = [ 'key', 'endkey']
   path2 = ['key', 'key', 'endkey']
 
-  root.bindPath(path1, path2, -> ok(true))
+  root.bindPath([path1, path2], -> ok(true))
 
   a.endkey.set("ended again")    # set this twice to prove it is not triggering
   a.endkey.set("ended thrice")   # the handler
@@ -188,7 +188,7 @@ test "triggers handler for last path in detour when first path isn't connected",
   path1 = [ 'key', 'endkey']
   path2 = ['key', 'key', 'endkey']
 
-  root.bindPath(path1, path2, -> ok(true))
+  root.bindPath([path1, path2], -> ok(true))
 
   end.trigger('change')   # set this twice to prove it is not triggering
   end.trigger('change')   # the handler
