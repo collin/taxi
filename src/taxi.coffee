@@ -168,12 +168,17 @@ Taxi.Mixin = Pathology.Module.extend ({def, defs}) ->
   defs property: (name) ->
     Taxi.Property.new(name, this)
 
-  def bindPath: (path, handler) ->
+  def bindPath: (paths..., handler) ->
     @pathBindings ?= []
-    _path = Taxi.Path.new(this, handler)
-    _path.addSegment(segment) for segment in path
-    @pathBindings.push _path
-    _path
+
+    if paths.length > 1
+      return Taxi.Detour.new(this, paths, handler)
+    else
+      path = paths[0]
+      _path = Taxi.Path.new(this, handler)
+      _path.addSegment(segment) for segment in path
+      @pathBindings.push _path
+      return _path
 
   def bind: specParser (spec, _arguments) ->
     @_callbacks ?= new Object
@@ -218,7 +223,7 @@ Taxi.Mixin = Pathology.Module.extend ({def, defs}) ->
     return undefined
 
 Taxi.Detour = Pathology.Object.extend ({delegate, include, def, defs}) ->
-  def initialize: (@root, @paths..., @handler) ->
+  def initialize: (@root, @paths, @handler) ->
     @boundPaths = for path, index in @paths
       do (index) =>
         @root.bindPath path, => @handlerFor(index, @boundPaths, @handler)
@@ -248,6 +253,13 @@ Taxi.Detour = Pathology.Object.extend ({delegate, include, def, defs}) ->
   #     Iterates over all the bound paths with a higher priority.
   #     If any of them have 'connected' to an object we short-circuit.
   #     Otherwise we call the handler.
+  #   """
+
+  def unbind: ->
+    invoke @boundPaths, 'unbind'
+  # @::unbind.doc =
+  #   desc: """
+  #     Unbinds all paths in the detour.
   #   """
 
 # Taxi.Detour.doc = """
