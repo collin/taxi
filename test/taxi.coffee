@@ -4,6 +4,9 @@ NS = Pathology.Namespace.new("NS")
 Evented = NS.Evented = Pathology.Object.extend()
 Evented.include Taxi.Mixin
 Evented.property("key")
+End = NS.End = Evented.extend()
+End.property("endkey")
+
 
 module  "Taxi.bind()/trigger()"
 test "trigger events without namespace", ->
@@ -96,9 +99,6 @@ test "triggers events bound on a path", ->
 
 test "binds along nested path", ->
   expect(3)
-  End = NS.End = Evented.extend()
-  End.property("endkey")
-
   end = End.new()
   middle = Evented.new()
   root = Evented.new()
@@ -118,8 +118,6 @@ test "and re-binds events when objects along the path change", ->
   root = Evented.new()
   a = Evented.new()
   b = Evented.new()
-  End = Evented.extend()
-  End.property("endkey")
   end = End.new()
 
   path = root.bindPath ['key','key', 'endkey'], -> ok true
@@ -140,8 +138,6 @@ test "triggers event when last item is re-boud", ->
   root = Evented.new()
   a = Evented.new()
   b = Evented.new()
-  End = Evented.extend()
-  End.property("endkey")
   end = End.new()
   end.endkey.set("ended")
 
@@ -152,3 +148,49 @@ test "triggers event when last item is re-boud", ->
 
   root.key.set(a)
   root.key.set(b)
+
+module "Taxi.Detour"
+test "triggers handler for first path in detour", ->
+  expect 1
+
+  root = Evented.new()
+  end = End.new()
+  a = End.new()
+
+  root.key.set end
+  end.endkey.set('ended')
+  end.key.set(a)
+  a.endkey.set('ended')
+
+  path1 = [ 'key', 'endkey']
+  path2 = ['key', 'key', 'endkey']
+
+  Taxi.Detour.new(root, path1, path2, -> ok(true) )
+
+  a.endkey.set("ended again")    # set this twice to prove it is not triggering
+  a.endkey.set("ended thrice")   # the handler
+  end.endkey.set("ended again")  #
+
+
+test "triggers handler for last path in detour when first path isn't connected", ->
+  expect 1
+  expect 1
+
+  root = Evented.new()
+  end = End.new()
+  a = End.new()
+
+  root.key.set end
+  # end.endkey.set('ended')
+  end.key.set(a)
+  a.endkey.set('ended')
+
+  path1 = [ 'key', 'endkey']
+  path2 = ['key', 'key', 'endkey']
+
+  Taxi.Detour.new(root, path1, path2, -> ok(true) )
+
+  end.trigger('change')   # set this twice to prove it is not triggering
+  end.trigger('change')   # the handler
+  a.endkey.set('ended again')
+

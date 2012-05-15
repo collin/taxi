@@ -102,6 +102,7 @@ end
 
 desc "upload versions"
 task :upload => :test do
+  load "./version.rb"
   uploader = GithubUploader.setup_uploader
   GithubUploader.upload_file uploader, "taxi-#{TAXI_VERSION}.js", "Taxi #{TAXI_VERSION}", "dist/taxi.js"
   GithubUploader.upload_file uploader, "taxi-#{TAXI_VERSION}-spade.js", "Taxi #{TAXI_VERSION} (minispade)", "dist/taxi-spade.js"

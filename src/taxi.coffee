@@ -54,11 +54,16 @@ Taxi.Path = Pathology.Object.extend ({def}) ->
   def inspect: ->
     "segments: " + _(@segments).pluck('value').join(",")
 
+  def unbind: ->
+    invoke @segments, 'revokeBindings'
 
   def addSegment: (segment) ->
     @segments.push( _segment = Taxi.Segment.new(this, segment) )
     _segment.rebind()
     _segment
+
+  def connected: ->
+    any @lastSegment().objects()
 
   def lastSegment: ->
     _.last @segments
@@ -211,6 +216,58 @@ Taxi.Mixin = Pathology.Module.extend ({def, defs}) ->
         _spec.invokeAsAll(spec.event, _arguments)
 
     return undefined
+
+Taxi.Detour = Pathology.Object.extend ({delegate, include, def, defs}) ->
+  def initialize: (@root, @paths..., @handler) ->
+    @boundPaths = for path, index in @paths
+      do (index) =>
+        @root.bindPath path, => @handlerFor(index, @boundPaths, @handler)
+  # @::initialize.doc =
+  #   params: [
+  #     ["@root", "Pathology.Object", true]
+  #     ["@paths...", "Array", true]
+  #     ["@handler", "Function", true]
+  #   ]
+  #   desc: """
+  #
+  #   """
+
+  def handlerFor: (index, boundPaths, handler) ->
+    unless index is 0
+      for path, _index in boundPaths[0..index]
+        continue if index is _index
+        return if path.connected()
+    handler()
+  # @::handlerFor.doc =
+  #   params: [
+  #     ["index", "Number", true]
+  #     ["bouthPaths", ["Taxi.Path"], true]
+  #     ["handler", "Function", true]
+  #   ]
+  #   desc: """
+  #     Iterates over all the bound paths with a higher priority.
+  #     If any of them have 'connected' to an object we short-circuit.
+  #     Otherwise we call the handler.
+  #   """
+
+# Taxi.Detour.doc = """
+#   Sometimes you have one callback that could follow two possible paths.
+#   Also known as a detour.
+#
+#   An example of this would be a chain of command. During standard procedures
+#    orders flow along the full chain of command. But under extreme
+#     circumstances you might recieve an order directly from the general.
+#     At that point you would prioritize your order from the general.
+#
+#   ```coffee
+#     soldier = Army.Soldier.new()
+#     emergency = ['general', 'standingOrder']
+#     standard = ['officer', 'standingOrder']
+#
+#     Taxi.Detour.new soldier, emergency, standard, (-> console.log soldier.currentOrders() )
+#   ```
+#
+# """
 
 Taxi.Map = Pathology.Map.extend ({delegate, include, def, defs}) ->
   include Taxi.Mixin
