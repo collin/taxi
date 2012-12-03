@@ -1,1 +1,1 @@
-TAXI_VERSION = "0.5.0"
+TAXI_VERSION = "0.6.0"
