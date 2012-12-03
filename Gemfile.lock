@@ -1,4 +1,10 @@
 GIT
+  remote: git://gist.github.com/4194390.git
+  revision: 92a086ea287be0e0dcb5834f6cbc7331dc0d83cb
+  specs:
+    pathology-rakep (0.1.0)
+
+GIT
   remote: https://github.com/livingsocial/rake-pipeline.git
   revision: 543f4322fe70facee9572d29ddabf7f090dad68a
   specs:
@@ -65,6 +71,7 @@ DEPENDENCIES
   colored
   github_uploader (~> 0.1.0)
   html_package (~> 0.0.3)
+  pathology-rakep!
   rake-pipeline!
   rake-pipeline-web-filters!
   tilt

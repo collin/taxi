@@ -1,7 +1,7 @@
 require "pathology"
 require "underscore"
 {clone, isArray, isString, concat, flatten, unique, map, unshift, invoke, compact,
-slice, toArray, pluck, indexOf, include, last, any} = _
+slice, toArray, pluck, indexOf, include, last, any, isEqual, bind, each} = _
 
 EVENT_NAMESPACER = /\.([\w-_]+)$/
 
@@ -37,17 +37,32 @@ specParser = (fn) ->
     parsedSpec = parseSpec(rawSpec)
     fn.apply this, [parseSpec(rawSpec), toArray(arguments)[1..]]
 
-Taxi.Spec = Pathology.Object.extend ({def}) ->
-  def initialize: (spec) ->
-    {@path, @namespace, @context, @handler} = spec
+class Taxi.Spec
+  def initialize: ({@event, @namespace, @context, @handler}) ->
+  # @::initialize.doc =
+  #   params: [
+  #     ["spec", "Object", true]
+  #   ]
+  #   desc: """
+  #     spec keys:
+  #     <table>
+  #       <tr><td>event</td><td></td></tr>
+  #       <tr><td>namespace</td><td></td></tr>
+  #       <tr><td>context</td><td></td></tr>
+  #       <tr><td>handler</td><td></td></tr>
+  #     </table>
+  #   """
 
   def invoke: (_arguments) ->
-    @handler.apply(@context, _arguments)
+    Taxi.Governer.react "#{@objectId()} #{_arguments.toString()}", =>
+      @handler.apply(@context, _arguments)
 
   def invokeAsAll: (realEvent, _arguments) ->
-    @handler.apply(@context, _(clone _arguments).unshift(realEvent))
+    key = @context.objectId() + realEvent + _arguments.toString()
+    Taxi.Governer.react key, =>
+      @handler.apply(@context, _(clone _arguments).unshift(realEvent))
 
-Taxi.Path = Pathology.Object.extend ({def}) ->
+class Taxi.Path
   def initialize: (@root, @handler) ->
     @segments = new Array
 
@@ -63,7 +78,7 @@ Taxi.Path = Pathology.Object.extend ({def}) ->
     _segment
 
   def connected: ->
-    any @lastSegment().objects()
+    any @lastSegment().objects(@value)
 
   def lastSegment: ->
     _.last @segments
@@ -83,7 +98,7 @@ Taxi.Path = Pathology.Object.extend ({def}) ->
   def readToSegment: (segment) ->
     segment.readToSelf(@root, @segments)
 
-Taxi.Segment = Pathology.Object.extend ({def}) ->
+class Taxi.Segment
   def inspect: ->
     "@value: #{@value}"
 
@@ -94,7 +109,7 @@ Taxi.Segment = Pathology.Object.extend ({def}) ->
   def root: -> @path.root
 
   def previousObjects: ->
-    @path.segmentBefore(this)?.objects() or [@root()]
+    @path.segmentBefore(this)?.objects(@value) or [@root()]
 
   def properties: () ->
     properties = []
@@ -105,11 +120,12 @@ Taxi.Segment = Pathology.Object.extend ({def}) ->
     properties
 
   def objects: ->
-    objects = []
+    return @_objects if @_objects
+    @_objects = []
     for property in @properties()
-      objects = objects.concat property.objects()
+      @_objects = @_objects.concat property.objects(@value)
 
-    objects
+    @_objects
 
   def applyBindings: (properties = @properties()) ->
     # console.log "applyBindings", @, properties
@@ -127,6 +143,9 @@ Taxi.Segment = Pathology.Object.extend ({def}) ->
       context: this
 
   def rebind: ->
+    [objects, @_objects] = [@_objects, undefined]
+    return if isEqual objects, @objects() and objects isnt undefined
+    #PERF AS.count("path rebind")
     @revokeBindings()
     @applyBindings()
 
@@ -146,25 +165,99 @@ Taxi.Segment = Pathology.Object.extend ({def}) ->
       property.unbind("."+namespace)
       @boundObjects.del(property)
 
-  def changeCallback: ->
+  def changeCallback: (item) ->
     # console.log "changeCallback", @, @path
-    if @path.segmentAfter(this)
-      @rebind()
-      segment.rebind() for segment in @path.segmentsAfter(this)
-      last = @path.lastSegment()
-      @path.handler() if _(last.objects()).any()
-    else
-      @path.handler()
+    Taxi.Governer.once "#{@objectId()} change", =>
+      if @path.segmentAfter(this)
+        @rebind()
+        segment.rebind() for segment in @path.segmentsAfter(this)
+        last = @path.lastSegment()
+        @path.handler(item) if _(last.objects()).any()
+      else
+        @path.handler(item)
 
   def insertCallback: (item, collection) ->
-    return unless segment = @path.segmentAfter(this)
-    segment.bindToObject(item)
+    Taxi.Governer.once "#{@objectId} insert #{item.objectId()}", =>
+      return unless segment = @path.segmentAfter(this)
+      segment.bindToObject(item)
 
   def removeCallback: (item, collection) ->
-    return unless segment = @path.segmentAfter(this)
-    segment.revokeObjectBindings(item)
+    Taxi.Governer.once "#{@objectId} remove #{item.objectId()}", =>
+      return unless segment = @path.segmentAfter(this)
+      segment.revokeObjectBindings(item)
 
-Taxi.Mixin = Pathology.Module.extend ({def, defs}) ->
+class Taxi.Governer
+  defs run: (fn) ->
+    @enter()
+    fn()
+    @exit()
+
+  defs once: (object, fn) ->
+    return fn() unless @currentLoop
+    return if @currentLoop.tainted(object)
+    @currentLoop.taint(object)
+    @schedule(fn)
+
+  defs react: (object, fn) ->
+    unless @currentLoop?
+      @enter()
+      setTimeout 0, bind( @exit, this )
+    @once(object, fn)
+  # @::react.doc =
+  #   params: [
+  #     ["object", "*", true]
+  #     ["fn", "Function", true]
+  #   ]
+  #   desc: """
+  #     May be called outside of a RunLoop. Creates a RunLoop if there
+  #     isn't one. If a RunLoop is scheaduled from 'react', it is scheduled
+  #     to exit as soon as control is handed back to the browser.
+  #
+  #     A likely use of 'react' is in response to a user initiated DOM
+  #     event, such as a click. Arguments and handling of the callback
+  #     are the same as in Taxi.Governer.once.
+  #   """
+
+  defs schedule: (fn) ->
+    throw new Error "Cannot schedule a task unless a RunLoop is active." unless @currentLoop
+    @currentLoop.schedule(fn)
+
+  defs enter: ->
+    throw new Error "Cannot enter a RunLoop while one is active." if @currentLoop
+    @currentLoop = Taxi.Governer.RunLoop.new()
+
+  defs exit: ->
+    throw new Error "Cannot exit a RunLoop unless one is active." unless @currentLoop
+    console.time("Exiting RunLoop")
+    @_exit() while @currentLoop.any()
+    @currentLoop = undefined
+    console.timeEnd("Exiting RunLoop")
+
+  defs _exit: ->
+    [exitingLoop, @currentLoop] = [@currentLoop, undefined]
+    @enter()
+    exitingLoop.flush()
+
+class Taxi.Governer.RunLoop
+  def initialize: ->
+    @_schedule = []
+    @_taintedObjects = Pathology.Set.new()
+
+  def taint: (object) ->
+    @_taintedObjects.add(object)
+
+  def tainted: (object) ->
+    @_taintedObjects.include(object)
+
+  def schedule: (fn) ->
+    @_schedule.push fn
+
+  def any: -> _.any @_schedule
+
+  def flush: ->
+    fn() for fn in @_schedule
+
+module Taxi.Mixin
   defs property: (name) ->
     Taxi.Property.new(name, this)
 
@@ -221,7 +314,7 @@ Taxi.Mixin = Pathology.Module.extend ({def, defs}) ->
 
     return undefined
 
-Taxi.Detour = Pathology.Object.extend ({delegate, include, def, defs}) ->
+class Taxi.Detour
   def initialize: (@root, @paths, @handler) ->
     @boundPaths = for path, index in @paths
       do (index) =>
@@ -280,7 +373,7 @@ Taxi.Detour = Pathology.Object.extend ({delegate, include, def, defs}) ->
 #
 # """
 
-Taxi.Map = Pathology.Map.extend ({delegate, include, def, defs}) ->
+class Taxi.Map < Pathology.Map
   include Taxi.Mixin
 
   def set: (key, value) ->
@@ -291,14 +384,15 @@ Taxi.Map = Pathology.Map.extend ({delegate, include, def, defs}) ->
 # Specify on multiple lines to retain object paths.
 Taxi.Property = Pathology.Property
 
-Taxi.Property.Instance = Pathology.Property.Instance.extend ({delegate, include, def, defs}) ->
+class Taxi.Property.Instance < Pathology.Property.Instance
   include Taxi.Mixin
 
   def addDependant: (dependant) ->
     (@dependants ?= []).push dependant
 
   def triggerDependants: ->
-    dependant.triggerFor() for dependant in (@dependants ? [])
+    Taxi.Governer.react "#{@objectId()} triggerDependants", =>
+      dependant.triggerFor() for dependant in (@dependants ? [])
 
   def bindToPathSegment: (segment) ->
     segment.binds this, "change", segment.changeCallback
