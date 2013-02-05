@@ -83,23 +83,25 @@ task :phantomjs do
 end
 
 
-desc "tag/upload release"
-task :release, [:version] => :test do |t, args|
+desc "write version number"
+task "bump", [:version] do |t, args|
   unless args[:version] and args[:version].match(/^[\d]+\.[\d]+\.[\d].*$/)
     raise "SPECIFY A VERSION curent version: #{TAXI_VERSION}"
   end
   File.open("./version.rb", "w") do |f| 
     f.write %|TAXI_VERSION = "#{args[:version]}"|
   end
-
   system "git add version.rb"
   system "git commit -m 'bumped version to #{args[:version]}'"
   system "git tag #{args[:version]}"
+end
+
+desc "tag/upload release"
+task :release => [:test] do |t, args|
   system "git push origin master"
   system "git push origin #{args[:version]}"
   Rake::Task[:upload].invoke
 end
-
 desc "upload versions"
 task :upload => :test do
   load "./version.rb"

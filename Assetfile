@@ -55,9 +55,9 @@ input "test", "taxi.coffee" do
   coffee_script { "taxi-test.js" }
 end
 
-input "./", "taxi.erb" do
-  require "./version"
-  filter(Rake::Pipeline::Web::Filters::TiltFilter, {}, Object) do |input|
-    "taxi.html"
-  end
-end
+# input "./", "taxi.erb" do
+#   require "./version"
+#   filter(Rake::Pipeline::Web::Filters::TiltFilter, {}, Object) do |input|
+#     "taxi.html"
+#   end
+# end

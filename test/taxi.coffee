@@ -1,5 +1,7 @@
 {extend} = _
 
+window.requestAnimationFrame = (callback) -> callback()
+
 NS = Pathology.Namespace.new("NS")
 Evented = NS.Evented = Pathology.Object.extend()
 Evented.include Taxi.Mixin

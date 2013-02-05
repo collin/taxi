@@ -7,6 +7,32 @@ EVENT_NAMESPACER = /\.([\w-_]+)$/
 
 Taxi = window.Taxi = Pathology.Namespace.new("Taxi")
 
+# http://paulirish.com/2011/requestanimationframe-for-smart-animating/
+# http://my.opera.com/emoller/blog/2011/12/20/requestanimationframe-for-smart-er-animating
+
+# requestAnimationFrame polyfill by Erik Möller
+# fixes from Paul Irish and Tino Zijdel
+lastTime = 0
+vendors = ["ms", "moz", "webkit", "o"]
+x = 0
+
+while x < vendors.length and not window.requestAnimationFrame
+  window.requestAnimationFrame = window[vendors[x] + "RequestAnimationFrame"]
+  window.cancelAnimationFrame = window[vendors[x] + "CancelAnimationFrame"] or window[vendors[x] + "CancelRequestAnimationFrame"]
+  ++x
+unless window.requestAnimationFrame
+  window.requestAnimationFrame = (callback, element) ->
+    currTime = new Date().getTime()
+    timeToCall = Math.max(0, 16 - (currTime - lastTime))
+    id = window.setTimeout(->
+      callback currTime + timeToCall
+    , timeToCall)
+    lastTime = currTime + timeToCall
+    id
+unless window.cancelAnimationFrame
+  window.cancelAnimationFrame = (id) ->
+    clearTimeout id
+
 NO_EVENT = toString: "NO_EVENT"
 parseSpec = (raw) ->
  if isString(raw)
@@ -229,9 +255,17 @@ class Taxi.Governer
   defs exit: ->
     throw new Error "Cannot exit a RunLoop unless one is active." unless @currentLoop
     console.time("Exiting RunLoop")
-    @_exit() while @currentLoop.any()
-    @currentLoop = undefined
-    console.timeEnd("Exiting RunLoop")
+
+    cancelAnimationFrame @currentAnimationFrame if @currentAnimationFrame
+    @currentAnimationFrame = requestAnimationFrame =>
+      @currentAnimationFrame = undefined
+      unless @currentLoop
+        console.warn "requestAnimationFrame with no currentLoop"
+        return
+      console.log "requestAnimationFrame"
+      @_exit() while @currentLoop.any()
+      @currentLoop = undefined
+      console.timeEnd("Exiting RunLoop")
 
   defs _exit: ->
     [exitingLoop, @currentLoop] = [@currentLoop, undefined]
@@ -255,6 +289,7 @@ class Taxi.Governer.RunLoop
   def any: -> _.any @_schedule
 
   def flush: ->
+    console.log "FLUSH"
     fn() for fn in @_schedule
 
 module Taxi.Mixin
